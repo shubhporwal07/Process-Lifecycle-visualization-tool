@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OperatOS — Process Lifecycle Visualizer</title>
+<meta name="description" content="Interactive Process Life Cycle Visualization Tool — Simulates OS process scheduling with FCFS, Round Robin, SJF, SRTF, Priority algorithms. C backend engine with real-time visualization.">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo">Operat<em>OS</em></div>
+  <div class="vsep"></div>
+  <div class="backend-badge" id="backend-status">
+    <div class="bb-dot"></div>
+    <span>C Backend</span>
+  </div>
+  <div class="vsep"></div>
+  <div style="display:flex;gap:4px;">
+    <button class="btn" id="btn-play" onclick="togglePlay()">▶ PLAY</button>
+    <button class="btn" onclick="stepForward()">⏭ STEP</button>
+    <button class="btn" onclick="resetSim()">⏹ RESET</button>
+  </div>
+  <div class="vsep"></div>
+  <div class="speed-w">
+    <span class="lbl">Speed</span>
+    <input type="range" id="spd" min="1" max="10" value="5" oninput="updateSpeed(this.value)">
+    <span class="lbl" id="spd-v">5×</span>
+  </div>
+  <div class="vsep"></div>
+  <span class="lbl">Algorithm</span>
+  <select class="sel" id="algo" onchange="changeAlgo(this.value)">
+    <option value="FCFS">FCFS</option>
+    <option value="RR" selected>Round Robin</option>
+    <option value="Priority">Priority</option>
+    <option value="SJF">SJF</option>
+    <option value="SRTF">SRTF (Preemptive)</option>
+    <option value="PriorityP">Priority (Preemptive)</option>
+  </select>
+  <div class="clk">T = <span id="clk">0000</span></div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: PCBs -->
+  <div class="side">
+    <div class="ph"><div class="ph-dot"></div>Process Control Blocks</div>
+    <div class="pb" id="pcb-list"></div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center">
+    <!-- Narrator -->
+    <div class="narrator" id="narrator">
+      <div class="narr-icon" id="narr-icon">💤</div>
+      <div class="narr-text">
+        <div class="narr-main" id="narr-main">System Idle — Waiting for processes</div>
+        <div class="narr-sub" id="narr-sub">Click PLAY or create processes to begin the simulation.</div>
+      </div>
+      <div class="narr-algo">
+        <div class="albl">Algorithm</div>
+        <div class="aval" id="narr-algo-val">Round Robin</div>
+      </div>
+    </div>
+
+    <!-- Diagram -->
+    <div class="diagram" id="diagram">
+      <svg id="dsvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="orb-layer"></div>
+      <div class="ctx-flash" id="ctx-flash"><div class="ctx-label" id="ctx-label"></div></div>
+
+      <div class="node nd-new" id="nd-new" style="left:50%;top:12%" onclick="showTransModal('new-ready')">
+        <div class="node-label">New</div>
+        <div class="node-sub" id="ns-new">0 procs</div>
+        <div class="node-count" id="nc-new" style="border-color:var(--new);color:var(--new);">0</div>
+        <div class="node-tokens" id="tk-new"></div>
+      </div>
+
+      <div class="node nd-ready" id="nd-ready" style="left:50%;top:38%" onclick="showTransModal('ready-running')">
+        <div class="node-label">Ready Queue</div>
+        <div class="node-sub" id="ns-ready">0 waiting</div>
+        <div class="node-count" id="nc-ready" style="border-color:var(--ready);color:var(--ready);">0</div>
+        <div class="node-tokens" id="tk-ready"></div>
+      </div>
+
+      <div class="node nd-run" id="nd-run" style="left:50%;top:67%">
+        <div class="node-label">CPU</div>
+        <div class="node-sub" id="ns-run">IDLE</div>
+        <div class="node-count" id="nc-rr" style="border-color:var(--run);color:var(--run);display:none;">3</div>
+        <div class="node-tokens" id="tk-run"></div>
+      </div>
+
+      <div class="node nd-wait" id="nd-wait" style="left:17%;top:67%" onclick="showTransModal('waiting-ready')">
+        <div class="node-label">Waiting</div>
+        <div class="node-sub" id="ns-wait">0 blocked</div>
+        <div class="node-count" id="nc-wait" style="border-color:var(--wait);color:var(--wait);">0</div>
+        <div class="node-tokens" id="tk-wait"></div>
+      </div>
+
+      <div class="node nd-term" id="nd-term" style="left:83%;top:67%" onclick="showTransModal('running-terminated')">
+        <div class="node-label">Done</div>
+        <div class="node-sub" id="ns-term">0 done</div>
+        <div class="node-count" id="nc-term" style="border-color:var(--term);color:var(--dim);">0</div>
+      </div>
+    </div>
+
+    <!-- Gantt Chart -->
+    <div class="gantt-panel">
+      <div class="ph"><div class="ph-dot" style="background:var(--run);box-shadow:0 0 5px var(--run);"></div>Gantt Chart — CPU Timeline</div>
+      <div class="gantt-wrap" id="gantt-wrap"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Metrics -->
+  <div class="side right">
+    <div class="ph"><div class="ph-dot"></div>Live Metrics</div>
+    <div class="pb">
+      <div class="met">
+        <div class="mlbl">CPU Utilization</div>
+        <div class="gauge"><div class="gf gcpu" id="g-cpu" style="width:0%"></div><div class="gv" id="v-cpu">0%</div></div>
+      </div>
+      <div class="met">
+        <div class="mlbl">RAM Usage</div>
+        <div class="gauge"><div class="gf gram" id="g-ram" style="width:0%"></div><div class="gv" id="v-ram">0 MB</div></div>
+      </div>
+      <div class="met">
+        <div class="mlbl">Ready Queue</div>
+        <div class="gauge"><div class="gf grq" id="g-rq" style="width:0%"></div><div class="gv" id="v-rq">0</div></div>
+        <div class="qdots" id="qd-r"></div>
+      </div>
+      <div class="met">
+        <div class="mlbl">Waiting Queue</div>
+        <div class="gauge"><div class="gf gwq" id="g-wq" style="width:0%"></div><div class="gv" id="v-wq">0</div></div>
+        <div class="qdots" id="qd-w"></div>
+      </div>
+      <div class="met">
+        <div class="mlbl">Throughput</div>
+        <div class="big-num"><span id="tput">0.0</span></div>
+        <div class="big-sub">processes / 100 ticks</div>
+      </div>
+      <div class="met">
+        <div class="mlbl">Context Switches</div>
+        <div class="big-num" style="font-size:18px;"><span id="ctx-count">0</span></div>
+      </div>
+      <div class="met">
+        <div class="mlbl">Scheduler Decision</div>
+        <div class="algo-insight"><div class="ah" id="ai-lbl">—</div><div id="ai-body" style="font-size:9.5px;color:var(--text);">Awaiting dispatch...</div></div>
+      </div>
+      <div class="met">
+        <div class="mlbl">Event Log</div>
+        <div class="evlog" id="evlog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bot">
+  <button class="bcreate" onclick="createProc()">+ PROCESS</button>
+  <button class="bbatch" onclick="batchProc()">⚡ BATCH × 5</button>
+  <div class="qi-w">
+    <span>RR Quantum</span>
+    <input class="qi" type="number" id="qi" value="3" min="1" max="12" onchange="changeQuantum(this.value)">
+    <span>ticks</span>
+  </div>
+  <div class="vsep"></div>
+  <button class="btn" onclick="showSummary()" style="font-size:10px;">📊 SUMMARY</button>
+  <button class="btn" onclick="showComparison()" style="font-size:10px;">⚖️ COMPARE</button>
+  <div class="sbar">
+    <div class="si">Avg Wait: <span id="s-w">—</span></div>
+    <div class="si">Avg TAT: <span id="s-t">—</span></div>
+    <div class="si">CPU: <span id="s-u">—</span></div>
+    <div class="si">Done: <span id="s-d">0</span></div>
+  </div>
+</div>
+
+<!-- MODAL: Transition -->
+<div class="moverlay" id="m-tr"><div class="modal"><div class="mt" id="mt-t"></div><div class="mb2" id="mt-b"></div><button class="mc" onclick="closeM('m-tr')">CLOSE ✕</button></div></div>
+
+<!-- MODAL: Summary -->
+<div class="moverlay" id="m-sum"><div class="modal wide"><div class="mt">📊 Performance Summary</div><div class="mb2" id="ms-b"></div><button class="mc" onclick="closeM('m-sum')">CLOSE ✕</button></div></div>
+
+<!-- MODAL: Compare -->
+<div class="moverlay" id="m-cmp"><div class="modal wide"><div class="mt">⚖️ Algorithm Comparison</div><div class="mb2" id="mc-b"></div><button class="mc" onclick="closeM('m-cmp')">CLOSE ✕</button></div></div>
+
+<script src="engine.js"></script>
+</body>
+</html>
