@@ -758,7 +758,7 @@ async function init() {
     // Auto-create a batch to start with
     await batchProc();
   } else {
-    setNarrator('idle', 'Backend Offline — Cannot connect', 'Make sure process_server.exe is running on port 8080.', '❌');
+    setNarrator('idle', 'Backend Offline — Cannot connect', 'Make sure process_server.exe is running on port 9090.', '❌');
   }
   setTimeout(drawArrows, 50);
   window.addEventListener('resize', () => drawArrows([]));

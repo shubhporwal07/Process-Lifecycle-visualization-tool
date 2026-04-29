@@ -8,7 +8,7 @@ if %errorlevel% == 0 (
     echo   [OK] Build successful: process_server.exe
     echo.
     echo   To run: process_server.exe
-    echo   Then open: http://localhost:8080
+    echo   Then open: http://localhost:9090
 ) else (
     echo   [ERROR] Build failed!
 )
